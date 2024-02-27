@@ -90,6 +90,14 @@ spec:
             resourceFieldRef:
               resource: limits.cpu
 
+        - name: GOGC
+          value: "off"
+
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+
         - name: SALES_DB_USER # here as an example for configuring a hosted db.
           valueFrom:
             configMapKeyRef:

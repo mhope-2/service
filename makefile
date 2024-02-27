@@ -93,7 +93,7 @@ SHELL = $(if $(wildcard $(SHELL_PATH)),/bin/ash,/bin/bash)
 # CLASS NOTES
 #
 # Kind
-# 	For full Kind v0.20 release notes: https://github.com/kubernetes-sigs/kind/releases/tag/v0.21.0
+# 	For full Kind v0.22 release notes: https://github.com/kubernetes-sigs/kind/releases/tag/v0.22.0
 #
 # RSA Keys
 # 	To generate a private/public key PEM file.
@@ -123,10 +123,10 @@ SHELL = $(if $(wildcard $(SHELL_PATH)),/bin/ash,/bin/bash)
 
 GOLANG          := golang:1.22
 ALPINE          := alpine:3.19
-KIND            := kindest/node:v1.29.1@sha256:a0cc28af37cf39b019e2b448c54d1a3f789de32536cb5a5db61a49623e527144
-POSTGRES        := postgres:16.1
+KIND            := kindest/node:v1.29.2
+POSTGRES        := postgres:16.2
 GRAFANA         := grafana/grafana:10.3.0
-PROMETHEUS      := prom/prometheus:v2.49.0
+PROMETHEUS      := prom/prometheus:v2.50.0
 TEMPO           := grafana/tempo:2.3.0
 LOKI            := grafana/loki:2.9.0
 PROMTAIL        := grafana/promtail:2.9.0
@@ -328,10 +328,10 @@ dev-database-restart:
 # Administration
 
 migrate:
-	export SALES_DB_HOST=localhost; go run app/tooling/sales-admin/main.go migrate
+	export SALES_DB_HOST_PORT=localhost; go run app/tooling/sales-admin/main.go migrate
 
 seed: migrate
-	export SALES_DB_HOST=localhost; go run app/tooling/sales-admin/main.go seed
+	export SALES_DB_HOST_PORT=localhost; go run app/tooling/sales-admin/main.go seed
 
 pgcli:
 	pgcli postgresql://postgres:postgres@localhost
@@ -343,7 +343,7 @@ readiness:
 	curl -il http://localhost:3000/v1/readiness
 
 token-gen:
-	export SALES_DB_HOST=localhost; go run app/tooling/sales-admin/main.go gentoken 5cf37266-3473-4006-984f-9325122678b7 54bb2165-71e1-41a6-af3e-7da4a0e1e2c1
+	export SALES_DB_HOST_PORT=localhost; go run app/tooling/sales-admin/main.go gentoken 5cf37266-3473-4006-984f-9325122678b7 54bb2165-71e1-41a6-af3e-7da4a0e1e2c1
 
 docs:
 	go run app/tooling/docs/main.go --browser
@@ -352,10 +352,10 @@ docs:
 # Metrics and Tracing
 
 metrics-view-sc:
-	expvarmon -ports="localhost:4000" -vars="build,requests,goroutines,errors,panics,mem:memstats.Alloc"
+	expvarmon -ports="localhost:4000" -vars="build,requests,goroutines,errors,panics,mem:memstats.HeapAlloc,mem:memstats.HeapSys,mem:memstats.Sys"
 
 metrics-view:
-	expvarmon -ports="localhost:3001" -endpoint="/metrics" -vars="build,requests,goroutines,errors,panics,mem:memstats.Alloc"
+	expvarmon -ports="localhost:3001" -endpoint="/metrics" -vars="build,requests,goroutines,errors,panics,mem:memstats.HeapAlloc,mem:memstats.HeapSys,mem:memstats.Sys"
 
 grafana:
 	open -a "Google Chrome" http://localhost:3100/
@@ -491,7 +491,19 @@ talk-load:
 	hey -m GET -c 10 -n 1000 -H "Authorization: Bearer ${TOKEN}" "http://localhost:3000/v1/users?page=1&rows=2"
 
 talk-logs:
+	kubectl logs --namespace=$(NAMESPACE) -l app=$(APP) --all-containers=true -f --tail=100 --max-log-requests=6
+
+talk-logs-cpu:
 	kubectl logs --namespace=$(NAMESPACE) -l app=$(APP) --all-containers=true -f --tail=100 --max-log-requests=6 | grep SCHED
+
+talk-logs-mem:
+	kubectl logs --namespace=$(NAMESPACE) -l app=$(APP) --all-containers=true -f --tail=100 --max-log-requests=6 | grep "ms clock"
+
+talk-describe:
+	kubectl describe pod --namespace=$(NAMESPACE) -l app=$(APP)
+
+talk-metrics:
+	expvarmon -ports="localhost:4000" -vars="build,requests,goroutines,errors,panics,mem:memstats.HeapAlloc,mem:memstats.HeapSys,mem:memstats.Sys"
 
 # ==============================================================================
 # Admin Frontend
